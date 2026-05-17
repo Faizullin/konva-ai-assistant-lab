@@ -6,7 +6,7 @@ Pricing logic (runs once at import time):
   2. If it exists → load and use it.
   3. If it does not → fetch live rates from OpenRouter (no API key required),
      extract prices for our models, save to credentials/pricing.json, use them.
-  4. If the fetch fails → fall back to hardcoded table.
+  4. If the fetch fails or a model is missing pricing → raise an exception.
 """
 import json
 import os
@@ -21,18 +21,6 @@ from langchain_core.callbacks import BaseCallbackHandler
 _ROOT         = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 _CREDS_DIR    = os.path.join(_ROOT, "credentials")
 _PRICING_FILE = os.path.join(_CREDS_DIR, "pricing.json")
-
-# ── Hardcoded fallback (USD / 1 M tokens, updated 2026-05) ───────────────────
-_FALLBACK: dict[str, dict[str, float]] = {
-    "claude-haiku-4-5-20251001": {"input": 0.80,  "output": 4.00},
-    "claude-sonnet-4-20250514":  {"input": 3.00,  "output": 15.00},
-    "gpt-4o-mini":               {"input": 0.15,  "output": 0.60},
-    "gpt-4o":                    {"input": 2.50,  "output": 10.00},
-    "gemini-2.0-flash":          {"input": 0.10,  "output": 0.40},
-    "gemini-2.5-pro":            {"input": 1.25,  "output": 10.00},
-    "moonshot-v1-8k":            {"input": 0.12,  "output": 0.12},
-    "moonshot-v1-32k":           {"input": 0.24,  "output": 0.24},
-}
 
 # Our model name → OpenRouter model-id prefix for matching
 _OR_MAP = {
@@ -59,6 +47,9 @@ def _fetch_openrouter() -> tuple[dict[str, dict], dict[str, dict[str, float]]]:
     with urllib.request.urlopen(req, timeout=10) as resp:
         or_models = {m["id"]: m for m in json.loads(resp.read()).get("data", [])}
 
+    if not or_models:
+        raise RuntimeError("OpenRouter returned no model data")
+
     models_full: dict[str, dict]              = {}
     pricing:     dict[str, dict[str, float]]  = {}
 
@@ -69,17 +60,19 @@ def _fetch_openrouter() -> tuple[dict[str, dict], dict[str, dict[str, float]]]:
             key=lambda m: len(m["id"]),
             default=None,
         )
-        if match:
-            p   = match.get("pricing", {})
-            inp = round(float(p.get("prompt",     0)) * 1_000_000, 4)
-            out = round(float(p.get("completion", 0)) * 1_000_000, 4)
-            models_full[our_name] = match
-            pricing[our_name]     = {"input": inp, "output": out}
-            print(f"  [pricing] {our_name:<32} in=${inp}  out=${out}  (via {match['id']})")
-        else:
-            models_full[our_name] = {"id": or_prefix, "name": our_name, "pricing": {}, "_source": "fallback"}
-            pricing[our_name]     = _FALLBACK[our_name]
-            print(f"  [pricing] {our_name:<32} not found on OpenRouter — using fallback")
+        if not match:
+            raise RuntimeError(f"OpenRouter pricing model not found for {our_name} ({or_prefix})")
+
+        p = match.get("pricing", {})
+        try:
+            inp = round(float(p["prompt"]) * 1_000_000, 4)
+            out = round(float(p["completion"]) * 1_000_000, 4)
+        except (KeyError, TypeError, ValueError) as e:
+            raise RuntimeError(f"OpenRouter pricing missing or invalid for {our_name} ({match['id']})") from e
+
+        models_full[our_name] = match
+        pricing[our_name]     = {"input": inp, "output": out}
+        print(f"  [pricing] {our_name:<32} in=${inp}  out=${out}  (via {match['id']})")
 
     return models_full, pricing
 
@@ -110,8 +103,7 @@ def _load_pricing() -> dict[str, dict[str, float]]:
         print(f"[pricing] Saved to {_PRICING_FILE}")
         return pricing
     except Exception as e:
-        print(f"[pricing] OpenRouter fetch failed ({e}) — using hardcoded fallback")
-        return _FALLBACK
+        raise RuntimeError(f"OpenRouter pricing fetch failed: {e}") from e
 
 
 PRICING = _load_pricing()
@@ -161,7 +153,10 @@ class TokenTracker(BaseCallbackHandler):
 
     def on_llm_end(self, response: Any, **kwargs):
         inp, out = self._extract_tokens(response)
-        pricing  = PRICING.get(self._pending_model, {"input": 0.0, "output": 0.0})
+        try:
+            pricing = PRICING[self._pending_model]
+        except KeyError as e:
+            raise RuntimeError(f"Pricing not loaded for model {self._pending_model}") from e
         self.records.append(CallRecord(
             step          = self._pending_step,
             model         = self._pending_model,
