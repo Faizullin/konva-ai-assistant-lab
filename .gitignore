@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+output/*
+!output/.gitkeep
+credentials/*
+!credentials/.gitkeep
+*.pyc
+*.pyo
+*.pyd
+.Python
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+.DS_Store
+.claude/
