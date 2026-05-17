@@ -30,6 +30,8 @@ _FALLBACK: dict[str, dict[str, float]] = {
     "gpt-4o":                    {"input": 2.50,  "output": 10.00},
     "gemini-2.0-flash":          {"input": 0.10,  "output": 0.40},
     "gemini-2.5-pro":            {"input": 1.25,  "output": 10.00},
+    "moonshot-v1-8k":            {"input": 0.12,  "output": 0.12},
+    "moonshot-v1-32k":           {"input": 0.24,  "output": 0.24},
 }
 
 # Our model name → OpenRouter model-id prefix for matching
@@ -40,6 +42,8 @@ _OR_MAP = {
     "claude-sonnet-4-20250514":  "anthropic/claude-sonnet-4",
     "gemini-2.0-flash":          "google/gemini-2.0-flash",
     "gemini-2.5-pro":            "google/gemini-2.5-pro",
+    "moonshot-v1-8k":            "moonshot/moonshot-v1-8k",
+    "moonshot-v1-32k":           "moonshot/moonshot-v1-32k",
 }
 
 

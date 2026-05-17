@@ -20,7 +20,7 @@ from datetime import datetime
 from langgraph.types import Command
 
 OUTPUT_DIR   = os.path.join(os.path.dirname(__file__), "output")
-VALID_PROVIDERS = ("anthropic", "openai", "gemini")
+VALID_PROVIDERS = ("anthropic", "openai", "gemini", "kimi")
 
 DEFAULT_PROMPT = (
     "Create a beginner task for children. "

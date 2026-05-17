@@ -4,10 +4,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-OPENAI_API_KEY    = os.environ.get("OPENAI_API_KEY",    "")
-GOOGLE_API_KEY    = os.environ.get("GOOGLE_API_KEY",    "")
-MODEL_PROVIDER    = os.environ.get("MODEL_PROVIDER", "anthropic").lower()
+ANTHROPIC_API_KEY  = os.environ.get("ANTHROPIC_API_KEY", "")
+OPENAI_API_KEY     = os.environ.get("OPENAI_API_KEY",    "")
+GOOGLE_API_KEY     = os.environ.get("GOOGLE_API_KEY",    "")
+MOONSHOT_API_KEY   = os.environ.get("MOONSHOT_API_KEY",  "")
+MOONSHOT_BASE_URL  = os.environ.get("MOONSHOT_BASE_URL", "https://api.moonshot.cn/v1")
+MODEL_PROVIDER     = os.environ.get("MODEL_PROVIDER", "anthropic").lower()
 
 CANVAS_W = int(os.environ.get("CANVAS_W", 1200))
 CANVAS_H = int(os.environ.get("CANVAS_H", 800))
@@ -57,6 +59,11 @@ def get_models():
         # gemini-2.0-flash has no thinking overhead — safe for structured extraction at low token budgets
         fast    = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, max_output_tokens=1024)
         capable = ChatGoogleGenerativeAI(model="gemini-2.5-pro",   google_api_key=GOOGLE_API_KEY, max_output_tokens=4000)
+
+    elif MODEL_PROVIDER == "kimi":
+        from langchain_openai import ChatOpenAI
+        fast    = ChatOpenAI(model="moonshot-v1-8k",   api_key=MOONSHOT_API_KEY, base_url=MOONSHOT_BASE_URL, max_tokens=512)
+        capable = ChatOpenAI(model="moonshot-v1-32k",  api_key=MOONSHOT_API_KEY, base_url=MOONSHOT_BASE_URL, max_tokens=2000)
 
     else:  # anthropic (default)
         from langchain_anthropic import ChatAnthropic
